@@ -1,0 +1,23 @@
+{
+  "name": "pdf-form-organizer",
+  "version": "1.0.0",
+  "description": "Upload a scanned PDF, split it into pages, extract form number / serial number / date with Claude vision, and download the renamed pages organized into month folders.",
+  "main": "src/server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.32.1",
+    "archiver": "^7.0.1",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.1",
+    "multer": "^2.0.1",
+    "pdf-lib": "^1.17.1",
+    "uuid": "^11.0.3"
+  }
+}

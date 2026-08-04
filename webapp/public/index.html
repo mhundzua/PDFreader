@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <title>PDF Form Organizer</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <main class="app">
+    <header>
+      <h1>PDF Form Organizer</h1>
+      <p class="subtitle">Upload a scanned PDF. Claude reads each page, renames it FormNumber-SerialNumber, and sorts it into a month folder.</p>
+    </header>
+
+    <section id="upload-section" class="card">
+      <label class="file-picker" for="pdf-input">
+        <span id="file-picker-label">Choose or scan a PDF</span>
+        <input id="pdf-input" type="file" accept="application/pdf" />
+      </label>
+      <button id="start-btn" disabled>Upload &amp; Process</button>
+      <p id="upload-error" class="error" hidden></p>
+    </section>
+
+    <section id="progress-section" class="card" hidden>
+      <h2>Processing…</h2>
+      <div class="progress-bar">
+        <div id="progress-fill" class="progress-fill"></div>
+      </div>
+      <p id="progress-label">0 / 0 pages</p>
+    </section>
+
+    <section id="summary-section" class="card" hidden>
+      <h2>Done</h2>
+      <p id="summary-headline"></p>
+      <ul id="summary-folders"></ul>
+      <a id="download-btn" class="button" href="#" download>Download ZIP</a>
+      <button id="reset-btn" class="secondary">Process another PDF</button>
+    </section>
+
+    <section id="error-section" class="card" hidden>
+      <h2>Something went wrong</h2>
+      <p id="error-message"></p>
+      <button id="error-reset-btn" class="secondary">Try again</button>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
