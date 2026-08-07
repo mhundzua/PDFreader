@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PDF Form Organizer</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
+  <main class="container">
+    <h1>PDF Form Organizer</h1>
+    <p class="subtitle">
+      Upload a scanned PDF. Each page is split, read by Claude, renamed to
+      <code>FormNumber-SerialNumber</code>, and sorted into month folders by date.
+    </p>
+
+    <form id="upload-form">
+      <label class="file-label" for="pdf-input">
+        <span id="file-label-text">Choose PDF</span>
+      </label>
+      <input type="file" id="pdf-input" name="pdf" accept="application/pdf,.pdf" required />
+      <button type="submit" id="process-btn" disabled>Process PDF</button>
+    </form>
+
+    <div id="status" class="status" hidden></div>
+    <div id="error" class="error" hidden></div>
+
+    <section id="results" hidden>
+      <h2>Summary</h2>
+      <div id="summary-stats"></div>
+      <a id="download-link" class="download-btn" href="#" download>Download organized files (.zip)</a>
+
+      <h3>Details</h3>
+      <div id="page-table-wrap">
+        <table id="page-table">
+          <thead>
+            <tr><th>Page</th><th>Folder</th><th>File</th><th>Notes</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
