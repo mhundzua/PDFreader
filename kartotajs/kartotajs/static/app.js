@@ -65,6 +65,11 @@ async function refreshQueue() {
   }
   $("#queue-count").textContent = data.queue.length ? `(${data.queue.length})` : "";
   $("#queue-empty").hidden = data.queue.length > 0;
+  const bad = data.unsupported || [];
+  $("#unsupported").hidden = bad.length === 0;
+  $("#unsupported").textContent = bad.length
+    ? `${bad.length} faili netiek rādīti, jo nav atbalstīta veida (der PDF, JPG, PNG, HEIC): ${bad.slice(0, 5).join(", ")}${bad.length > 5 ? "…" : ""}`
+    : "";
 
   if (!state.current || !state.queue.includes(state.current)) {
     const next = pickNext(null);
@@ -89,7 +94,7 @@ function showEmpty() {
   $("#page-img").removeAttribute("src");
   $("#open-pdf").removeAttribute("href");
   $("#pager").hidden = true;
-  $("#status").textContent = `Mapē Ienākošie (${state.settings?.inbox || ""}) nav jaunu PDF failu.`;
+  $("#status").textContent = `Mapē Ienākošie (${state.settings?.inbox || ""}) nav jaunu kvīšu.`;
 }
 
 // --- viena kvīts -------------------------------------------------------------

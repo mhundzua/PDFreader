@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Optional
 
 from .config import Config
+from .documents import as_pdf_bytes, is_supported
 from .naming import file_name, folder_name, parse_iso, validate
 
 
@@ -27,9 +28,18 @@ def list_inbox(cfg: Config) -> list[str]:
     inbox = cfg.inbox_path
     if not inbox.is_dir():
         return []
-    files = [p for p in inbox.iterdir() if p.is_file() and p.suffix.lower() == ".pdf"
+    files = [p for p in inbox.iterdir() if p.is_file() and is_supported(p)
              and not p.name.startswith(".")]
     return [p.name for p in sorted(files, key=lambda p: (p.stat().st_mtime, p.name))]
+
+
+def unsupported_in_inbox(cfg: Config) -> list[str]:
+    """Faili mapē Ienākošie, kurus rīks nevar atvērt (lai lietotājs zina, kāpēc to nav sarakstā)."""
+    inbox = cfg.inbox_path
+    if not inbox.is_dir():
+        return []
+    return sorted(p.name for p in inbox.iterdir()
+                  if p.is_file() and not p.name.startswith(".") and not is_supported(p))
 
 
 def inbox_file(cfg: Config, name: str) -> Path:
@@ -39,6 +49,8 @@ def inbox_file(cfg: Config, name: str) -> Path:
     path = cfg.inbox_path / name
     if not path.is_file():
         raise ActionError(f"Fails '{name}' vairs nav mapē Ienākošie")
+    if not is_supported(path):
+        raise ActionError(f"Fails '{name}' nav atbalstīta veida")
     return path
 
 
@@ -146,9 +158,10 @@ def accept(cfg: Config, name: str, contract: str, serial: str, date_iso: str,
     folder.mkdir(parents=True, exist_ok=True)
     target = folder / info["file"]
     # Izveidojam failu tikai tad, ja tāda vēl nav (nekad nepārrakstām).
+    content = as_pdf_bytes(source)  # attēls tiek pārvērsts PDF
     try:
-        with source.open("rb") as src, target.open("xb") as dst:
-            shutil.copyfileobj(src, dst)
+        with target.open("xb") as dst:
+            dst.write(content)
     except FileExistsError:
         raise ActionError("Šāds fails mērķa mapē jau ir. Pārbaudiet numurus") from None
     shutil.copystat(source, target)

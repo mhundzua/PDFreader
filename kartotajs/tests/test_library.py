@@ -86,3 +86,21 @@ def test_path_traversal_blocked(cfg):
     for bad in ("../x.pdf", "/etc/passwd", "", ".hidden.pdf"):
         with pytest.raises(library.ActionError):
             library.inbox_file(cfg, bad)
+
+
+def test_images_are_listed_and_saved_as_pdf(cfg):
+    from PIL import Image
+
+    Image.new("RGB", (400, 300), "white").save(cfg.inbox_path / "foto.jpg")
+    (cfg.inbox_path / "dokuments.docx").write_bytes(b"x")
+    assert "foto.jpg" in library.list_inbox(cfg)
+    assert library.unsupported_in_inbox(cfg) == ["dokuments.docx", "piezimes.txt"]
+
+    res = library.accept(cfg, "foto.jpg", "ROV_043274", "235126", "2026-08-29")
+    saved = open(res["target"], "rb").read()
+    assert res["target"].endswith("ROV_043274-235126.pdf")
+    assert saved.startswith(b"%PDF")
+    assert (cfg.processed_path / "foto.jpg").exists()
+
+    library.undo(cfg)
+    assert (cfg.inbox_path / "foto.jpg").exists()

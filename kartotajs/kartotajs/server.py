@@ -10,7 +10,9 @@ from pathlib import Path
 
 from flask import Flask, jsonify, request, send_file
 
-from . import extract, library
+import mimetypes
+
+from . import documents, extract, library
 from .config import Config
 from .ocr import available_engines
 
@@ -105,6 +107,7 @@ def create_app(cfg: Config | None = None) -> Flask:
             "ocr": cfg.ocr,
             "queue": [{"name": n, "ready": extractor.cached(cfg.inbox_path / n)} for n in names],
             "last": library.last_action(cfg),
+            "unsupported": library.unsupported_in_inbox(cfg),
         })
 
     @app.get("/api/extract")
@@ -119,6 +122,8 @@ def create_app(cfg: Config | None = None) -> Flask:
         if not 0 <= page < extract.page_count(path):
             return error("Nav tādas lapas", 404)
         img = extract.render_page(path, page=page, dpi=150)
+        if img.width > 1800:
+            img = img.resize((1800, round(img.height * 1800 / img.width)))
         buf = io.BytesIO()
         img.save(buf, "JPEG", quality=88)
         buf.seek(0)
@@ -127,7 +132,11 @@ def create_app(cfg: Config | None = None) -> Flask:
     @app.get("/api/pdf")
     def pdf():
         path = library.inbox_file(cfg, request.args.get("name", ""))
-        return send_file(path, mimetype="application/pdf")
+        if documents.is_image(path) and path.suffix.lower() in (".heic", ".heif", ".tif", ".tiff"):
+            # Pārlūki šos formātus parasti neatver; rādām kā PDF.
+            return send_file(io.BytesIO(documents.as_pdf_bytes(path)), mimetype="application/pdf")
+        mime = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+        return send_file(path, mimetype=mime)
 
     @app.post("/api/target")
     def target():

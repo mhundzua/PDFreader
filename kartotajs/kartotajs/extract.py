@@ -20,10 +20,10 @@ from pathlib import Path
 from typing import Optional
 
 import numpy as np
-import pymupdf
 from PIL import Image
 
 from . import parsing
+from .documents import page_count, render_page
 from .ocr import Word
 
 log = logging.getLogger(__name__)
@@ -72,17 +72,6 @@ class FieldResult:
             "crop": self.crop_png,
             "candidates": self.candidates,
         }
-
-
-def render_page(pdf_path: Path, page: int = 0, dpi: int = RENDER_DPI) -> Image.Image:
-    with pymupdf.open(pdf_path) as doc:
-        pix = doc[page].get_pixmap(dpi=dpi, alpha=False)
-        return Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
-
-
-def page_count(pdf_path: Path) -> int:
-    with pymupdf.open(pdf_path) as doc:
-        return doc.page_count
 
 
 def png_b64(img: Image.Image) -> str:
@@ -261,7 +250,8 @@ def collect_texts(name: str, page: Image.Image, page_words: dict, box, engines) 
 
 
 def _vote(parsed: list[tuple[str, float, str]]) -> tuple[str, int, int, list[str]]:
-    """Atgriež (labākā vērtība, cik avotu to atbalsta, avotu kopskaits, visi varianti)."""
+    """Atgriež (labākā vērtība, cik avotu to atbalsta, cik dažādu OCR dzinēju to atbalsta,
+    visi varianti)."""
     scores: dict[str, float] = defaultdict(float)
     sources: dict[str, set] = defaultdict(set)
     for value, conf, src in parsed:
@@ -271,7 +261,13 @@ def _vote(parsed: list[tuple[str, float, str]]) -> tuple[str, int, int, list[str
         return "", 0, 0, []
     ranked = sorted(scores, key=lambda v: (-len(sources[v]), -scores[v]))
     best = ranked[0]
-    return best, len(sources[best]), len({s for _, _, s in parsed}), ranked[:5]
+    engines = {s.split(":")[0] for s in sources[best]}
+    return best, len(sources[best]), len(engines), ranked[:5]
+
+
+def _conflicts(best: str, ranked: list[str]) -> bool:
+    """Vai ir cits tikpat garš variants ar atšķirīgu vērtību (piem., 229604 pret 429604)."""
+    return any(v != best and len(v) == len(best) for v in ranked)
 
 
 def read_field(name: str, page: Image.Image, page_words: dict, matrix, engines) -> FieldResult:
@@ -300,7 +296,7 @@ def read_field(name: str, page: Image.Image, page_words: dict, matrix, engines) 
         if parsed:
             result.note = "Gads nav salasāms, pieņemts pēdējais iespējamais. Pārbaudiet datumu"
 
-    best, support, _, ranked = _vote(parsed)
+    best, support, engine_support, ranked = _vote(parsed)
     result.value = best
     result.candidates = ranked
     if not best:
@@ -309,12 +305,15 @@ def read_field(name: str, page: Image.Image, page_words: dict, matrix, engines) 
 
     if name == "contract":
         result.confident = len(ranked) == 1
-    elif name == "serial":
-        result.confident = support >= 3 and len(best) == 6
-        if len(best) != 6:
-            result.note = "Numurs nav 6 cipari, lūdzu pārbaudiet"
     else:
-        result.confident = support >= 3 and not result.note
+        # Rokraksts: viens OCR dzinējs var konsekventi kļūdīties (piem., rokraksta '2'
+        # vienmēr nolasīt kā '4'), tāpēc drošs tikai tad, ja vismaz divi dažādi dzinēji
+        # neatkarīgi nonāk pie tās pašas vērtības un nav pretrunīgu variantu.
+        result.confident = (support >= 3 and engine_support >= 2
+                            and not _conflicts(best, ranked) and not result.note)
+        if name == "serial" and len(best) != 6:
+            result.confident = False
+            result.note = "Numurs nav 6 cipari, lūdzu pārbaudiet"
     if not result.confident and not result.note:
         result.note = "Rīks nav pārliecināts, lūdzu pārbaudiet"
     return result

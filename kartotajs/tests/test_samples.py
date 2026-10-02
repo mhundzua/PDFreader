@@ -1,5 +1,6 @@
 """Pārbaude ar īstām kvītīm. Kvītis satur personas datus, tāpēc repozitorijā
-tās nav: norādiet mapi ar KARTOTAJS_SAMPLES=/ceļš (faili kvits1.pdf ... kvits4.pdf).
+tās nav: norādiet mapi ar KARTOTAJS_SAMPLES=/ceļš (faili kvits1.pdf ... kvits4.pdf,
+un, ja ir, tās pašas kvītis kā attēli kvits1.webp/.jpg ...).
 
 Rokrakstā nolasītajiem laukiem prasām: vai nu pareiza vērtība, vai lauks
 atzīmēts kā neskaidrs (lai lietotājs to pārbauda). Pārliecinoši nepareiza
@@ -30,14 +31,27 @@ def engines():
 
 @pytest.mark.parametrize("name", sorted(EXPECTED))
 def test_sample(name, engines):
-    from kartotajs.extract import extract
-
     path = Path(SAMPLES) / name
     if not path.exists():
         pytest.skip(f"{name} nav")
+    check(path, EXPECTED[name], engines)
+
+
+@pytest.mark.parametrize("name", sorted(EXPECTED))
+def test_sample_as_image(name, engines):
+    stem = Path(name).stem
+    images = [p for p in Path(SAMPLES).glob(f"{stem}.*") if p.suffix.lower() != ".pdf"]
+    if not images:
+        pytest.skip(f"{stem} attēls nav")
+    check(images[0], EXPECTED[name], engines)
+
+
+def check(path, expected, engines):
+    from kartotajs.extract import extract
+
     fields = extract(path, engines)["fields"]
-    assert fields["contract"]["value"] == EXPECTED[name]["contract"]
+    assert fields["contract"]["value"] == expected["contract"]
     assert fields["contract"]["confident"]
     for key in ("serial", "date"):
         got = fields[key]
-        assert got["value"] == EXPECTED[name][key] or not got["confident"], (key, got["value"])
+        assert got["value"] == expected[key] or not got["confident"], (key, got["value"])
