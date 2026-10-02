@@ -55,3 +55,24 @@ def check(path, expected, engines):
     for key in ("serial", "date"):
         got = fields[key]
         assert got["value"] == expected[key] or not got["confident"], (key, got["value"])
+
+
+def test_two_receipts_on_one_page(engines):
+    """Divas kvītis uz skenera stikla vienā skenējumā (fails divas.pdf)."""
+    from kartotajs.extract import extract_page
+
+    path = Path(SAMPLES) / "divas.pdf"
+    if not path.exists():
+        pytest.skip("divas.pdf nav")
+    units = extract_page(path, 0, engines)["units"]
+    assert len(units) == 2
+    expected = [
+        {"contract": "ROV_043452", "serial": "214203", "date": "2026-09-27"},
+        {"contract": "ROV_043396", "serial": "SNL127668", "date": "2026-09-19"},
+    ]
+    for unit, exp in zip(units, expected):
+        fields = unit["fields"]
+        assert fields["contract"]["value"] == exp["contract"]
+        for key in ("serial", "date"):
+            got = fields[key]
+            assert got["value"] == exp[key] or not got["confident"], (key, got["value"])

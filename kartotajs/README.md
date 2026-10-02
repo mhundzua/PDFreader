@@ -6,14 +6,23 @@ Viss notiek uz jūsu datora: nav maksas servisu, internets nav vajadzīgs
 
 ## Ko tas dara
 
-1. Ņem PDF failus no mapes **Ienākošie**.
+1. Ņem failus no mapes **Ienākošie**: PDF vai attēlus (JPG, PNG, iPhone HEIC).
+   - Vienā skenējumā var būt **vairākas kvītis**, piemēram, divas uz skenera stikla
+     viena virs otras. Rīks tās atrod un rāda rindā kā atsevišķas kvītis
+     ("Scan.pdf · 1/2", "Scan.pdf · 2/2"). Kvītīm nav jābūt taisni novietotām,
+     tikai nedrīkst pārklāties un iziet ārpus stikla.
+   - Daudzlapu PDF: katra lapa tiek apstrādāta atsevišķi.
 2. Ar OCR nolasa **līguma Nr.** (`ROV_` + 6 cipari), **alkometra sērijas Nr.**
    un pieņemšanas **datumu** (lauks "DATUMS:" augšā labajā stūrī).
 3. Parāda tos rediģējamos laukos blakus kvīts priekšskatījumam. Pie katra lauka
    redzams palielināts izgriezums no kvīts, lai varētu ātri salīdzināt.
 4. Parāda gala nosaukumu, piemēram, `ROV_043274-235126.pdf` mapē `2026-Augusts`.
-5. **Tikai pēc pogas "Akceptēt"** fails tiek nokopēts uz mēneša mapi, un
-   oriģināls tiek pārvietots uz `Ienākošie/Apstrādāti`.
+5. **Tikai pēc pogas "Akceptēt"** kvīts tiek saglabāta mēneša mapē kā atsevišķs PDF.
+   Kad visas kvītis no skenējuma ir akceptētas, oriģināls tiek pārvietots uz
+   `Ienākošie/Apstrādāti`.
+
+Ja sērijas numuram priekšā ir burti (piem. `SNL 127668`), tie tiek saglabāti
+nosaukumā bez atstarpes: `ROV_043396-SNL127668.pdf`.
 
 ### Drošība
 

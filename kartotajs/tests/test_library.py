@@ -104,3 +104,58 @@ def test_images_are_listed_and_saved_as_pdf(cfg):
 
     library.undo(cfg)
     assert (cfg.inbox_path / "foto.jpg").exists()
+
+
+def _two_receipt_pdf(path):
+    """A4 lapa ar divām "kvītīm": augšā sarkana, apakšā zila."""
+    import pymupdf
+
+    doc = pymupdf.open()
+    page = doc.new_page(width=595, height=842)
+    page.draw_rect(pymupdf.Rect(0, 0, 595, 421), color=(1, 0, 0), fill=(1, 0, 0))
+    page.draw_rect(pymupdf.Rect(0, 421, 595, 842), color=(0, 0, 1), fill=(0, 0, 1))
+    doc.save(path)
+
+
+def test_two_receipts_in_one_file(cfg):
+    import io
+
+    from PIL import Image
+    import pymupdf
+
+    _two_receipt_pdf(cfg.inbox_path / "divas.pdf")
+    units = ["0-0", "0-1"]
+    top = {"id": "0-0", "page": 0, "top": 0.0, "bottom": 0.5}
+    bottom = {"id": "0-1", "page": 0, "top": 0.5, "bottom": 1.0}
+
+    first = library.accept(cfg, "divas.pdf", "ROV_043452", "214203", "2026-09-27",
+                           unit=top, all_units=units)
+    # Pirmā kvīts saglabāta, bet oriģināls paliek, jo otrā vēl nav apstrādāta.
+    assert not first["finished"]
+    assert (cfg.inbox_path / "divas.pdf").exists()
+    assert library.done_units(cfg, "divas.pdf") == {"0-0"}
+    with pymupdf.open(first["target"]) as doc:
+        pix = doc[0].get_pixmap(dpi=20)
+        img = Image.open(io.BytesIO(pix.tobytes("png"))).convert("RGB")
+    r, g, b = img.getpixel((img.width // 2, img.height // 2))
+    assert r > 200 and b < 80  # tikai augšējā (sarkanā) kvīts
+
+    with pytest.raises(library.ActionError):  # to pašu kvīti otrreiz nevar
+        library.accept(cfg, "divas.pdf", "ROV_043452", "214204", "2026-09-27",
+                       unit=top, all_units=units)
+
+    second = library.accept(cfg, "divas.pdf", "ROV_043396", "SNL127668", "2026-09-19",
+                            unit=bottom, all_units=units)
+    assert second["finished"]
+    assert not (cfg.inbox_path / "divas.pdf").exists()
+    assert (cfg.processed_path / "divas.pdf").exists()
+    assert (cfg.output_path / "2026-Septembris" / "ROV_043396-SNL127668.pdf").exists()
+
+    # Atsaucot otro: oriģināls atgriežas, pirmā paliek akceptēta.
+    library.undo(cfg)
+    assert (cfg.inbox_path / "divas.pdf").exists()
+    assert library.done_units(cfg, "divas.pdf") == {"0-0"}
+    # Atsaucot arī pirmo: viss kā sākumā.
+    library.undo(cfg)
+    assert library.done_units(cfg, "divas.pdf") == set()
+    assert not (cfg.output_path / "2026-Septembris").exists()

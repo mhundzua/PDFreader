@@ -114,6 +114,7 @@ input {
   background: var(--panel);
   color: var(--text);
 }
+input::placeholder { color: var(--muted); font-style: italic; opacity: .7; }
 #settings input { width: 100%; font-family: inherit; font-size: 14px; margin-top: 4px; }
 #settings label { display: block; margin-bottom: 10px; }
 

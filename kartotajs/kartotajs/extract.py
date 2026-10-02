@@ -93,7 +93,7 @@ def fit_layout(words: list[Word], size: tuple[int, int]) -> tuple[np.ndarray, in
     for w in words:
         norm = parsing.ascii_upper(w.text)
         for label, point in TEMPLATE_ANCHORS.items():
-            if not norm.startswith(label):
+            if not parsing.label_length(norm, label):
                 continue
             # Veidlapas apakšā ir vēl viens "DATUMS" - tas nav mums vajadzīgais.
             if label == "DATUMS" and w.box[1] > height * 0.4:
@@ -181,15 +181,15 @@ def ink_line(img: Image.Image) -> Optional[tuple[int, int, int, int]]:
 
 def _strip_label(text: str, label: str) -> str:
     """No 'LIGUMANr.: ROV_043274' atstāj tikai vērtību."""
-    up = parsing.ascii_upper(text)
-    if not up.startswith(label):
+    size = parsing.label_length(parsing.ascii_upper(text), label)
+    if not size:
         return text
     # Atrodam, kur oriģinālajā tekstā beidzas etiķete (ņemot vērā izlaistos simbolus).
     count = 0
     for i, ch in enumerate(text):
         if parsing.ascii_upper(ch):
             count += 1
-        if count >= len(label):
+        if count >= size:
             rest = text[i + 1:]
             return rest.lstrip(" .:")
     return ""
@@ -210,7 +210,7 @@ def collect_texts(name: str, page: Image.Image, page_words: dict, box, engines) 
     for eng_name, words in page_words.items():
         for w in words:
             norm = parsing.ascii_upper(w.text)
-            if norm.startswith(label):
+            if parsing.label_length(norm, label):
                 # OCR mēdz etiķeti un vērtību nolasīt kā vienu rindu.
                 if label == "DATUMS" and w.box[1] > page.height * 0.4:
                     continue
@@ -319,8 +319,55 @@ def read_field(name: str, page: Image.Image, page_words: dict, matrix, engines) 
     return result
 
 
-def extract(pdf_path: Path, engines) -> dict:
-    page = render_page(pdf_path)
+def find_receipts(words: list[Word], size: tuple[int, int]) -> list[tuple[int, int]]:
+    """Atrod, cik kvīšu ir lapā (piem. divas uz skenera stikla viena virs otras).
+
+    Katrai kvītij augšā ir "ROVICO" logo un "LĪGUMA Nr." etiķete. Atgriež katras
+    kvīts augšējo un apakšējo robežu pikseļos.
+    """
+    _, height = size
+    marks = sorted(
+        w.box[1] for w in words
+        if parsing.ascii_upper(w.text) == "ROVICO"
+        or parsing.label_length(parsing.ascii_upper(w.text), "LIGUMANR")
+    )
+    groups: list[list[float]] = []
+    for y in marks:
+        if groups and y - groups[-1][-1] < height * 0.15:
+            groups[-1].append(y)
+        else:
+            groups.append([y])
+    if len(groups) <= 1:
+        return [(0, height)]
+    pad = int(height * 0.02)
+    cuts = [0] + [max(0, int(min(g)) - pad) for g in groups[1:]] + [height]
+    return [(cuts[i], cuts[i + 1]) for i in range(len(groups))]
+
+
+def _shift(words: list[Word], y0: int, y1: int) -> list[Word]:
+    """Vārdi, kas pieder kvītij starp y0 un y1, ar koordinātām attiecībā pret to."""
+    out = []
+    for w in words:
+        cy = (w.box[1] + w.box[3]) / 2
+        if y0 <= cy < y1:
+            box = (w.box[0], w.box[1] - y0, w.box[2], w.box[3] - y0)
+            out.append(Word(w.text, w.conf, box, list(w.alts)))
+    return out
+
+
+def read_receipt(img: Image.Image, page_words: dict, engines) -> dict:
+    all_words = [w for ws in page_words.values() for w in ws]
+    matrix, anchors = fit_layout(all_words, img.size)
+    fields = {
+        name: read_field(name, img, page_words, matrix, engines).as_dict()
+        for name in ("contract", "serial", "date")
+    }
+    return {"fields": fields, "anchors": anchors}
+
+
+def extract_page(path: Path, page_index: int, engines) -> dict:
+    """Nolasa vienu faila lapu. Atgriež visas tajā atrastās kvītis ("units")."""
+    page = render_page(path, page=page_index)
     page_words = {}
     for eng in engines:
         try:
@@ -328,15 +375,30 @@ def extract(pdf_path: Path, engines) -> dict:
         except Exception as exc:
             log.warning("OCR kļūda (%s): %s", eng.name, exc)
     all_words = [w for ws in page_words.values() for w in ws]
-    matrix, anchors = fit_layout(all_words, page.size)
-    fields = {
-        name: read_field(name, page, page_words, matrix, engines).as_dict()
-        for name in ("contract", "serial", "date")
-    }
+    units = []
+    for i, (y0, y1) in enumerate(find_receipts(all_words, page.size)):
+        img = page.crop((0, y0, page.width, y1))
+        words = {name: _shift(ws, y0, y1) for name, ws in page_words.items()}
+        unit = read_receipt(img, words, engines)
+        unit.update({
+            "id": f"{page_index}-{i}",
+            "page": page_index,
+            # robežas kā daļa no lapas augstuma (neatkarīgi no izšķirtspējas)
+            "top": round(y0 / page.height, 4),
+            "bottom": round(y1 / page.height, 4),
+        })
+        units.append(unit)
     return {
-        "fields": fields,
-        "anchors": anchors,
+        "page": page_index,
+        "units": units,
         "engines": [e.name for e in engines],
-        "pages": page_count(pdf_path),
         "extracted_at": dt.datetime.now().isoformat(timespec="seconds"),
     }
+
+
+def extract(path: Path, engines) -> dict:
+    """Ērtības funkcija: pirmās lapas pirmā kvīts (un visas kvītis laukā "units")."""
+    result = extract_page(path, 0, engines)
+    first = result["units"][0]
+    return {**result, "fields": first["fields"], "anchors": first["anchors"],
+            "pages": page_count(path)}

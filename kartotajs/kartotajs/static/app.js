@@ -7,8 +7,8 @@ const state = {
   queue: [],
   current: null,
   skipped: new Set(),
-  page: 0,
-  pages: 1,
+  items: [],
+  cur: null, // { name, page, unit, top, bottom }
   busy: false,
   targetOk: false,
   loadToken: 0,
@@ -36,7 +36,7 @@ function lvToIso(text) {
   return `${year}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
 }
 
-// --- rinda -------------------------------------------------------------------
+// --- rinda (katrs ieraksts ir viena kvīts; failā var būt vairākas) ----------
 async function refreshQueue() {
   let data;
   try {
@@ -45,7 +45,8 @@ async function refreshQueue() {
     $("#status").textContent = "Nav savienojuma ar rīku. Vai Start.command logs ir atvērts?";
     return;
   }
-  state.queue = data.queue.map((q) => q.name);
+  state.items = data.queue;
+  state.queue = data.queue.map((q) => q.key);
   state.settings = { inbox: data.inbox, output: data.output };
   $("#undo").disabled = !data.last;
   $("#undo").title = data.last
@@ -56,11 +57,12 @@ async function refreshQueue() {
   list.innerHTML = "";
   for (const item of data.queue) {
     const li = document.createElement("li");
-    li.className = (item.name === state.current ? "current " : "") + (item.ready ? "ready" : "");
+    li.dataset.key = item.key;
+    li.className = (item.key === state.current ? "current " : "") + (item.ready ? "ready" : "");
     li.innerHTML = `<span class="dot">●</span><span></span>`;
-    li.lastChild.textContent = item.name + (state.skipped.has(item.name) ? " (izlaists)" : "");
+    li.lastChild.textContent = item.label + (state.skipped.has(item.key) ? " (izlaists)" : "");
     li.title = item.ready ? "Nolasīts" : "Tiek nolasīts…";
-    li.onclick = () => load(item.name);
+    li.onclick = () => load(item.key);
     list.appendChild(li);
   }
   $("#queue-count").textContent = data.queue.length ? `(${data.queue.length})` : "";
@@ -71,6 +73,21 @@ async function refreshQueue() {
     ? `${bad.length} faili netiek rādīti, jo nav atbalstīta veida (der PDF, JPG, PNG, HEIC): ${bad.slice(0, 5).join(", ")}${bad.length > 5 ? "…" : ""}`
     : "";
 
+  if (state.current && !state.queue.includes(state.current)) {
+    // Lapa pa to laiku nolasīta: tās vietā rindā tagad ir konkrētas kvītis.
+    const [name, page] = state.current.split("|");
+    const same = state.items.find((i) => i.name === name && String(i.page) === page);
+    if (same && state.cur && same.name === state.cur.name) state.current = same.key;
+    if (same && state.cur && state.cur.unit) {
+      const exact = `${name}|${page}|${state.cur.unit}`;
+      if (state.queue.includes(exact)) state.current = exact;
+    }
+    if (state.queue.includes(state.current)) {
+      markCurrent();
+      const item = state.items.find((i) => i.key === state.current);
+      if (item) $("#doc-name").textContent = item.label;
+    }
+  }
   if (!state.current || !state.queue.includes(state.current)) {
     const next = pickNext(null);
     if (next) load(next);
@@ -78,9 +95,15 @@ async function refreshQueue() {
   }
 }
 
+function markCurrent() {
+  document.querySelectorAll("#queue li").forEach((li) => {
+    li.classList.toggle("current", li.dataset.key === state.current);
+  });
+}
+
 function pickNext(after) {
   const q = state.queue;
-  const start = after ? q.indexOf(after) + 1 : 0;
+  const start = after && q.includes(after) ? q.indexOf(after) + 1 : 0;
   const order = q.slice(start).concat(q.slice(0, start));
   return order.find((n) => n !== after && !state.skipped.has(n))
     || order.find((n) => n !== after)
@@ -89,6 +112,7 @@ function pickNext(after) {
 
 function showEmpty() {
   state.current = null;
+  state.cur = null;
   $("#fields").hidden = true;
   $("#doc-name").textContent = "";
   $("#page-img").removeAttribute("src");
@@ -98,30 +122,31 @@ function showEmpty() {
 }
 
 // --- viena kvīts -------------------------------------------------------------
-async function load(name) {
+async function load(key) {
   const token = ++state.loadToken;
-  state.current = name;
-  state.page = 0;
-  document.querySelectorAll("#queue li").forEach((li) => {
-    li.classList.toggle("current", li.lastChild.textContent.startsWith(name));
-  });
-  $("#doc-name").textContent = name;
-  $("#open-pdf").href = `/api/pdf?name=${encodeURIComponent(name)}`;
+  const item = (state.items || []).find((i) => i.key === key);
+  if (!item) return;
+  state.current = key;
+  state.cur = { name: item.name, page: item.page, unit: item.unit, top: 0, bottom: 1 };
+  markCurrent();
+  $("#doc-name").textContent = item.label;
+  $("#open-pdf").href = `/api/pdf?name=${encodeURIComponent(item.name)}`;
+  $("#pager").hidden = true;
   showPage();
   $("#fields").hidden = true;
   $("#status").textContent = "Nolasa kvīti…";
 
   let data;
   try {
-    data = await api(`/api/extract?name=${encodeURIComponent(name)}`);
+    const unit = item.unit ? `&unit=${encodeURIComponent(item.unit)}` : "";
+    data = await api(`/api/extract?name=${encodeURIComponent(item.name)}&page=${item.page}${unit}`);
   } catch (e) {
     if (token === state.loadToken) $("#status").textContent = e.message;
     return;
   }
   if (token !== state.loadToken) return; // lietotājs pa to laiku izvēlējās citu
 
-  state.pages = data.pages || 1;
-  $("#pager").hidden = state.pages < 2;
+  state.cur = { name: item.name, page: item.page, unit: data.id, top: data.top, bottom: data.bottom };
   showPage();
   $("#status").textContent = data.error || "";
   for (const f of FIELDS) {
@@ -137,14 +162,16 @@ async function load(name) {
   }
   $("#fields").hidden = false;
   await updateTarget();
+  if (token !== state.loadToken) return;
   const firstUncertain = document.querySelector(".field.uncertain input");
   (firstUncertain || $("#accept")).focus();
 }
 
 function showPage() {
-  if (!state.current) return;
-  $("#page-img").src = `/api/page?name=${encodeURIComponent(state.current)}&page=${state.page}`;
-  $("#page-label").textContent = `${state.page + 1}/${state.pages}`;
+  const c = state.cur;
+  if (!c) return;
+  $("#page-img").src = `/api/page?name=${encodeURIComponent(c.name)}&page=${c.page}`
+    + `&top=${c.top}&bottom=${c.bottom}`;
 }
 
 function values() {
@@ -161,7 +188,9 @@ function scheduleTarget() {
   targetTimer = setTimeout(updateTarget, 150);
 }
 
+let targetSeq = 0;
 async function updateTarget() {
+  const seq = ++targetSeq;
   const v = values();
   const messages = [];
   let data = { errors: {}, warnings: [], folder: "", file: "" };
@@ -170,6 +199,7 @@ async function updateTarget() {
   } catch (e) {
     messages.push(["error", e.message]);
   }
+  if (seq !== targetSeq) return; // pa to laiku lauki mainīti; rāda jaunāko rezultātu
   if (!v.date && $("#f-date").value.trim()) {
     data.errors.date = "Datumu rakstiet formātā dd.mm.gggg";
   }
@@ -196,21 +226,23 @@ async function updateTarget() {
 }
 
 async function accept() {
-  if ($("#accept").disabled || !state.current) return;
-  const name = state.current;
+  if ($("#accept").disabled || !state.current || !state.cur) return;
+  const key = state.current;
+  const { name, page, unit } = state.cur;
   state.busy = true;
   $("#accept").disabled = true;
   try {
     const res = await api("/api/accept", {
       method: "POST",
-      body: JSON.stringify({ name, ...values() }),
+      body: JSON.stringify({ name, page, unit, ...values() }),
     });
     toast(`Saglabāts: ${res.folder}/${res.file}`, true);
-    state.skipped.delete(name);
-    const next = pickNext(name);
-    state.queue = state.queue.filter((n) => n !== name);
+    state.skipped.delete(key);
+    const next = pickNext(key);
+    state.queue = state.queue.filter((n) => n !== key);
+    state.items = state.items.filter((i) => i.key !== key);
     state.current = null;
-    if (next && next !== name) load(next);
+    if (next && next !== key) load(next);
     await refreshQueue();
   } catch (e) {
     toast(e.message);
@@ -225,7 +257,10 @@ async function undo() {
     const res = await api("/api/undo", { method: "POST" });
     toast(`Atsaukts. Kvīts "${res.source}" atgriezta rindā.`);
     await refreshQueue();
-    load(res.source);
+    const page = res.unit ? res.unit.split("-")[0] : null;
+    const item = state.items.find((i) => i.name === res.source
+      && (!res.unit || (String(i.page) === page && i.unit === res.unit)));
+    if (item) load(item.key);
   } catch (e) {
     toast(e.message);
   }
@@ -277,8 +312,6 @@ $("#zoom").onclick = () => {
   const zoomed = $("#preview").classList.toggle("zoomed");
   $("#zoom").textContent = zoomed ? "Attālināt" : "Tuvināt";
 };
-$("#prev-page").onclick = () => { if (state.page > 0) { state.page--; showPage(); } };
-$("#next-page").onclick = () => { if (state.page < state.pages - 1) { state.page++; showPage(); } };
 
 $("#open-settings").onclick = () => {
   $("#s-inbox").value = state.settings?.inbox || "";

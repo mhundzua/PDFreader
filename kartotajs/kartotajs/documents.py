@@ -67,3 +67,23 @@ def as_pdf_bytes(path: Path) -> bytes:
     # 200 dpi: A5/A4 kvīts drukājot būs aptuveni dabiskā izmērā.
     img.save(buf, "PDF", resolution=200.0)
     return buf.getvalue()
+
+
+def unit_pdf_bytes(path: Path, page: int, top: float, bottom: float) -> bytes:
+    """PDF ar vienu kvīti: vesela lapa vai tās daļa (ja lapā ir vairākas kvītis)."""
+    whole_page = top <= 0.001 and bottom >= 0.999
+    if whole_page and page_count(path) == 1:
+        return as_pdf_bytes(path)
+    if whole_page and not is_image(path):
+        with pymupdf.open(path) as src, pymupdf.open() as out:
+            out.insert_pdf(src, from_page=page, to_page=page)
+            return out.tobytes(garbage=3, deflate=True)
+    # Kvīts ir lapas daļa: izgriežam attēlu (lai PDF nesatur otru kvīti).
+    if is_image(path):
+        img = _open_image(path)
+    else:
+        img = render_page(path, page=page, dpi=200)
+    crop = img.crop((0, int(top * img.height), img.width, int(bottom * img.height)))
+    buf = io.BytesIO()
+    crop.save(buf, "PDF", resolution=200.0)
+    return buf.getvalue()

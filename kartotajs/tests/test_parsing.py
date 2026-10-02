@@ -40,3 +40,15 @@ def test_day_month_fallback_uses_latest_past_year():
 def test_ascii_upper():
     assert parsing.ascii_upper("LĪGUMA Nr.:") == "LIGUMANR"
     assert parsing.ascii_upper("ALKOMETRA SĒRIJAS NR.:") == "ALKOMETRASERIJASNR"
+
+
+def test_fuzzy_labels():
+    assert parsing.label_length("LICUMANR043452", "LIGUMANR") == 8  # 'Ī' nolasīts kā 'ic'
+    assert parsing.label_length("LIGUMANR", "LIGUMANR") == 8
+    assert parsing.label_length("KONTAKTTALRUNIS", "LIGUMANR") == 0
+    assert parsing.label_length("CEMA", "CENA") == 0  # īsām etiķetēm kļūdas nepieļaujam
+
+
+def test_serial_with_letter_prefix():
+    assert parsing.find_serial("SNL 127668") == "SNL127668"
+    assert parsing.find_serial("NR.: 235126") == "235126"

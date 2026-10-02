@@ -34,6 +34,31 @@ def ascii_upper(text: str) -> str:
     return re.sub(r"[^A-Z0-9]", "", text.upper())
 
 
+def _distance(a: str, b: str) -> int:
+    """Levenšteina attālums (cik burtu jāizmaina, lai a kļūtu par b)."""
+    prev = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        cur = [i]
+        for j, cb in enumerate(b, 1):
+            cur.append(min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (ca != cb)))
+        prev = cur
+    return prev[-1]
+
+
+def label_length(norm: str, label: str) -> int:
+    """Ja norm sākas ar etiķeti (pieļaujot OCR kļūdas, piem. 'LICUMANR'), atgriež cik
+    norm burtu aizņem etiķete; citādi 0."""
+    allowed = 0 if len(label) <= 4 else 1 if len(label) <= 8 else 2
+    if norm.startswith(label):
+        return len(label)
+    if allowed == 0:
+        return 0
+    for size in (len(label), len(label) - 1, len(label) + 1):
+        if 0 < size <= len(norm) and _distance(norm[:size], label) <= allowed:
+            return size
+    return 0
+
+
 def to_digits(text: str) -> str:
     """Pārvērš līdzīgos burtus ciparos; citus simbolus atstāj neskartus."""
     return "".join(DIGIT_LOOKALIKES.get(ch, ch) for ch in text)
@@ -46,8 +71,17 @@ def find_contract(text: str) -> Optional[str]:
     return "ROV_" + to_digits(m.group(1))
 
 
+_PREFIXED_SERIAL_RE = re.compile(r"(?<![A-Za-z])([A-Z]{2,4})\s?(\d{4,})(?!\d)")
+
+
 def find_serial(text: str) -> Optional[str]:
-    """Garākā ciparu virkne (pēc burtu pārvēršanas). Priekšroka 6 cipariem."""
+    """Garākā ciparu virkne (pēc burtu pārvēršanas). Priekšroka 6 cipariem.
+
+    Ja numuram priekšā ir lielie burti (piem. 'SNL 127668'), tie tiek saglabāti: 'SNL127668'.
+    """
+    for m in _PREFIXED_SERIAL_RE.finditer(text):
+        if m.group(1) not in ("NR", "NO", "ROV"):  # etiķetes vai līguma Nr. atliekas
+            return m.group(1) + m.group(2)
     digits = to_digits(text)
     runs = re.findall(r"\d+", digits)
     # Ja OCR starp cipariem ielicis atstarpi, mēģinām arī salipināt.
