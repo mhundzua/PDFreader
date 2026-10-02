@@ -57,3 +57,7 @@ def test_serial_with_letter_prefix():
 def test_serial_letters_and_two_serials():
     assert parsing.find_serial("SN 127668") == "127668"
     assert parsing.find_serials("127668; 219044") == ["127668", "219044"]
+
+
+def test_handwritten_four_read_as_u():
+    assert parsing.find_serials("2143u0/200159") == ["214340", "200159"]

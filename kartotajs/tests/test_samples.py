@@ -76,3 +76,16 @@ def test_two_receipts_on_one_page(engines):
         for key in ("serial", "date"):
             got = fields[key]
             assert got["value"] == exp[key] or not got["confident"], (key, got["value"])
+
+
+def test_two_devices_on_one_receipt(engines):
+    """Kvīts ar diviem alkometriem: sērijas Nr. "214340/200159" (fails divi_alko.pdf)."""
+    from kartotajs.extract import extract_page
+
+    path = Path(SAMPLES) / "divi_alko.pdf"
+    if not path.exists():
+        pytest.skip("divi_alko.pdf nav")
+    fields = extract_page(path, 0, engines)["units"][0]["fields"]
+    assert fields["contract"]["value"] == "ROV_043434"
+    assert {fields["serial"]["value"], fields["serial"]["second"]} == {"214340", "200159"}
+    assert not fields["serial"]["confident"]  # divi numuri vienmēr jāpārbauda
