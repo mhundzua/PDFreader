@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="lv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kvīšu kārtotājs</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header>
+    <h1>Kvīšu kārtotājs</h1>
+    <div class="header-actions">
+      <button id="undo" class="secondary" disabled title="Atsaukt pēdējo akceptēšanu">↶ Atsaukt</button>
+      <button id="open-settings" class="secondary">Iestatījumi</button>
+    </div>
+  </header>
+
+  <main>
+    <aside id="queue-panel">
+      <h2>Ienākošie <span id="queue-count"></span></h2>
+      <ul id="queue"></ul>
+      <p id="queue-empty" class="muted" hidden>Mapē nav jaunu kvīšu.</p>
+    </aside>
+
+    <section id="preview-panel">
+      <div id="preview-toolbar">
+        <span id="doc-name"></span>
+        <span id="pager" hidden>
+          <button id="prev-page" class="secondary small">‹</button>
+          <span id="page-label"></span>
+          <button id="next-page" class="secondary small">›</button>
+        </span>
+        <button id="zoom" class="secondary small" title="Tuvināt">Tuvināt</button>
+        <a id="open-pdf" target="_blank" rel="noopener">Atvērt PDF</a>
+      </div>
+      <div id="preview"><img id="page-img" alt="Kvīts priekšskatījums"></div>
+    </section>
+
+    <section id="form-panel">
+      <div id="status" class="muted"></div>
+      <form id="fields" autocomplete="off" hidden>
+        <div class="field" data-field="contract">
+          <label for="f-contract">Līguma Nr.</label>
+          <div class="row">
+            <input id="f-contract" name="contract" spellcheck="false">
+            <button type="button" class="confirm small">Pareizi ✓</button>
+          </div>
+          <img class="crop" alt="">
+          <p class="note"></p>
+        </div>
+        <div class="field" data-field="serial">
+          <label for="f-serial">Sērijas Nr.</label>
+          <div class="row">
+            <input id="f-serial" name="serial" spellcheck="false" inputmode="numeric">
+            <button type="button" class="confirm small">Pareizi ✓</button>
+          </div>
+          <img class="crop" alt="">
+          <p class="note"></p>
+        </div>
+        <div class="field" data-field="date">
+          <label for="f-date">Datums (dd.mm.gggg)</label>
+          <div class="row">
+            <input id="f-date" name="date" spellcheck="false" placeholder="29.08.2026">
+            <button type="button" class="confirm small">Pareizi ✓</button>
+          </div>
+          <img class="crop" alt="">
+          <p class="note"></p>
+        </div>
+
+        <div id="target">
+          <div><span class="muted">Mape:</span> <strong id="t-folder">—</strong></div>
+          <div><span class="muted">Fails:</span> <strong id="t-file">—</strong></div>
+          <ul id="messages"></ul>
+        </div>
+
+        <div class="actions">
+          <button type="submit" id="accept" disabled>Akceptēt</button>
+          <button type="button" id="skip" class="secondary">Izlaist</button>
+        </div>
+        <p class="muted hint">Enter = Akceptēt. Dzeltenie lauki jāpārbauda: izlabojiet vai spiediet "Pareizi ✓".</p>
+      </form>
+    </section>
+  </main>
+
+  <div id="toast" hidden></div>
+
+  <dialog id="settings">
+    <form method="dialog" id="settings-form">
+      <h2>Iestatījumi</h2>
+      <label>Mape "Ienākošie"<input id="s-inbox" required></label>
+      <label>Kur veidot mēnešu mapes<input id="s-output" required></label>
+      <p class="muted">Apstrādātās kvītis tiek pārvietotas uz apakšmapi "Apstrādāti" mapē Ienākošie.</p>
+      <p id="settings-error" class="error"></p>
+      <div class="actions">
+        <button type="submit" id="save-settings">Saglabāt</button>
+        <button type="button" id="close-settings" class="secondary">Atcelt</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

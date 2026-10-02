@@ -10,6 +10,9 @@ filename, only the folder). Both print/show a summary when done.
   your machine.
 - **`webapp/`** — a mobile-friendly web app: upload a PDF from your phone's
   browser and download a ZIP of the organized pages.
+- **`kartotajs/`** — Kvīšu kārtotājs: a fully local (no paid services) Mac
+  tool with a review screen for ROVICO receipts; nothing is filed until you
+  press "Akceptēt". See [`kartotajs/README.md`](kartotajs/README.md) (Latvian).
 
 ## CLI: `organize.py`
 
