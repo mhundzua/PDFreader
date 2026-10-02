@@ -71,29 +71,45 @@ def find_contract(text: str) -> Optional[str]:
     return "ROV_" + to_digits(m.group(1))
 
 
-_PREFIXED_SERIAL_RE = re.compile(r"(?<![A-Za-z])([A-Z]{2,4})\s?(\d{4,})(?!\d)")
+# Uz alkometriem bieži ir priekšā "SN" vai "SNL" (serial number) - to failā neliekam.
+_SN_PREFIX_RE = re.compile(r"(?<![A-Za-z])S\s?/?\s?NL?\s*[:.]?\s*(?=[0-9A-Z])")
+
+
+def strip_sn_prefix(text: str) -> str:
+    return _SN_PREFIX_RE.sub("", text)
+
+
+def find_serials(text: str) -> list[str]:
+    """Visi sērijas numuri tekstā (parasti viens, dažreiz divi alkometri).
+
+    Rīks meklē tikai ciparus. Retos numurus ar burtiem (piem. 1CH2667) lietotājs
+    ieraksta pats.
+    """
+    digits = to_digits(strip_sn_prefix(text))
+    found = re.findall(r"\d{4,10}", digits)
+    # Ja OCR starp cipariem ielicis atstarpi ("2 19596"), mēģinām salipināt.
+    if not any(len(f) == 6 for f in found):
+        for j in re.findall(r"\d[\d ]*\d", digits):
+            joined = j.replace(" ", "")
+            if len(joined) == 6:
+                found.append(joined)
+                break
+    unique = []
+    for f in found:
+        if f not in unique:
+            unique.append(f)
+    return unique
 
 
 def find_serial(text: str) -> Optional[str]:
-    """Garākā ciparu virkne (pēc burtu pārvēršanas). Priekšroka 6 cipariem.
-
-    Ja numuram priekšā ir lielie burti (piem. 'SNL 127668'), tie tiek izlaisti: '127668'.
-    """
-    for m in _PREFIXED_SERIAL_RE.finditer(text):
-        if m.group(1) not in ("ROV",):  # līguma Nr. atliekas
-            return m.group(2)
-    digits = to_digits(text)
-    runs = re.findall(r"\d+", digits)
-    # Ja OCR starp cipariem ielicis atstarpi, mēģinām arī salipināt.
-    joined = re.findall(r"\d[\d ]*\d", digits)
-    candidates = runs + [j.replace(" ", "") for j in joined]
-    candidates = [c for c in candidates if 4 <= len(c) <= 10]
-    if not candidates:
+    """Labākais sērijas numurs tekstā: priekšroka 6 cipariem."""
+    serials = find_serials(text)
+    if not serials:
         return None
-    six = [c for c in candidates if len(c) == 6]
+    six = [s for s in serials if len(s) == 6]
     if six:
         return six[0]
-    return max(candidates, key=len)
+    return max(serials, key=len)
 
 
 _SEP = r"\s*[.,\-/ ·:]\s*"

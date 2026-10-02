@@ -48,9 +48,14 @@
         <div class="field" data-field="serial">
           <label for="f-serial">Sērijas Nr.</label>
           <div class="row">
-            <input id="f-serial" name="serial" spellcheck="false" inputmode="numeric">
+            <input id="f-serial" name="serial" spellcheck="false">
             <button type="button" class="confirm small">Pareizi ✓</button>
           </div>
+          <div class="row second-row" id="serial2-row" hidden>
+            <input id="f-serial2" name="serial2" spellcheck="false" placeholder="otrs sērijas Nr.">
+            <button type="button" id="remove-serial2" class="secondary small" title="Noņemt otro numuru">✕</button>
+          </div>
+          <button type="button" id="add-serial2" class="link small">+ otrs sērijas Nr. (divi alkometri)</button>
           <img class="crop" alt="">
           <p class="note"></p>
         </div>

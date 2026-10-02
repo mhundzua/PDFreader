@@ -19,8 +19,14 @@ def folder_name(date: dt.date) -> str:
     return f"{date.year}-{MONTHS_LV[date.month]}"
 
 
+def split_serials(serial: str) -> list[str]:
+    """'127668; 219044' -> ['127668', '219044'] (divi alkometri vienā kvītī)."""
+    return [s.strip() for s in (serial or "").split(";") if s.strip()]
+
+
 def file_name(contract: str, serial: str) -> str:
-    return f"{contract}-{serial}.pdf"
+    """ROV_043396-127668.pdf vai, ja ir divi alkometri, ROV_043396-127668;219044.pdf"""
+    return f"{contract}-{';'.join(split_serials(serial))}.pdf"
 
 
 def parse_iso(value: str) -> Optional[dt.date]:
@@ -35,15 +41,19 @@ def validate(contract: str, serial: str, date_iso: str) -> tuple[dict, list[str]
     errors: dict[str, str] = {}
     warnings: list[str] = []
     contract = (contract or "").strip()
-    serial = (serial or "").strip()
+    serials = split_serials(serial)
     if not CONTRACT_RE.match(contract):
         errors["contract"] = "Līguma Nr. jābūt formātā ROV_ + 6 cipari"
-    if not serial:
+    if not serials:
         errors["serial"] = "Sērijas Nr. nav norādīts"
-    elif not SERIAL_RE.match(serial):
+    elif not all(SERIAL_RE.match(s) for s in serials):
         errors["serial"] = "Sērijas Nr. drīkst saturēt tikai burtus, ciparus un '-'"
-    elif not (serial.isdigit() and len(serial) == 6):
-        warnings.append("Sērijas Nr. nav 6 cipari, lūdzu pārbaudiet")
+    elif len(set(serials)) != len(serials):
+        errors["serial"] = "Abi sērijas numuri ir vienādi"
+    else:
+        for s in serials:
+            if s.isdigit() and len(s) != 6:
+                warnings.append(f"Sērijas Nr. {s} nav 6 cipari, lūdzu pārbaudiet")
     date = parse_iso(date_iso)
     if date is None:
         errors["date"] = "Datums nav derīgs"

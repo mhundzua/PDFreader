@@ -159,6 +159,7 @@ async function load(key) {
     const crop = box.querySelector(".crop");
     if (info.crop) crop.src = `data:image/png;base64,${info.crop}`;
     else crop.removeAttribute("src");
+    if (f === "serial") showSecondSerial(info.second ? info.second : null);
   }
   $("#fields").hidden = false;
   await updateTarget();
@@ -175,11 +176,21 @@ function showPage() {
 }
 
 function values() {
+  const serials = [$("#f-serial").value, $("#serial2-row").hidden ? "" : $("#f-serial2").value]
+    .map((s) => s.trim().toUpperCase())
+    .filter(Boolean);
   return {
     contract: $("#f-contract").value.trim().toUpperCase(),
-    serial: $("#f-serial").value.trim(),
+    serial: serials.join(";"),
     date: lvToIso($("#f-date").value),
   };
+}
+
+function showSecondSerial(value) {
+  const show = value !== null;
+  $("#serial2-row").hidden = !show;
+  $("#add-serial2").hidden = show;
+  $("#f-serial2").value = show ? value : "";
 }
 
 let targetTimer = null;
@@ -299,6 +310,19 @@ for (const f of FIELDS) {
     (next || $("#accept")).focus();
   });
 }
+$("#add-serial2").onclick = () => {
+  showSecondSerial("");
+  $("#f-serial2").focus();
+  updateTarget();
+};
+$("#remove-serial2").onclick = () => {
+  showSecondSerial(null);
+  updateTarget();
+};
+$("#f-serial2").addEventListener("input", () => {
+  document.querySelector('.field[data-field="serial"]').classList.remove("uncertain");
+  scheduleTarget();
+});
 $("#fields").addEventListener("submit", (e) => { e.preventDefault(); accept(); });
 $("#skip").onclick = () => {
   if (!state.current) return;

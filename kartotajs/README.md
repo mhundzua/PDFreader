@@ -21,8 +21,11 @@ Viss notiek uz jūsu datora: nav maksas servisu, internets nav vajadzīgs
    Kad visas kvītis no skenējuma ir akceptētas, oriģināls tiek pārvietots uz
    `Ienākošie/Apstrādāti`.
 
-Ja sērijas numuram priekšā ir burti (piem. `SNL 127668`), tie tiek izlaisti:
-`ROV_043396-127668.pdf`.
+Sērijas numuri:
+- Priekšā esošie `SN` / `SNL` tiek izlaisti: `SNL 127668` → `ROV_043396-127668.pdf`.
+- **Divi alkometri vienā kvītī:** spiediet "+ otrs sērijas Nr.". Fails būs
+  `ROV_043396-127668;219044.pdf`. Ja rīks pats pamana divus numurus, tas aizpilda abus.
+- Rīks meklē tikai ciparus. Retos numurus ar burtiem (piem. `1CH2667`) ierakstiet ar roku.
 
 Skenējiet ar **300 dpi**: rokraksts tiek nolasīts precīzāk nekā ar 150 dpi.
 

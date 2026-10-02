@@ -63,6 +63,7 @@ class FieldResult:
     note: str = ""
     crop_png: str = ""  # base64
     candidates: list[str] = field(default_factory=list)
+    second: str = ""  # otrs sērijas Nr., ja kvītī ir divi alkometri
 
     def as_dict(self) -> dict:
         return {
@@ -71,6 +72,7 @@ class FieldResult:
             "note": self.note,
             "crop": self.crop_png,
             "candidates": self.candidates,
+            "second": self.second,
         }
 
 
@@ -270,6 +272,19 @@ def _conflicts(best: str, ranked: list[str]) -> bool:
     return any(v != best and len(v) == len(best) for v in ranked)
 
 
+def _second_serial(best: str, texts: list[tuple[str, float, str]]) -> str:
+    """Otrs sērijas Nr., ja kādā nolasījumā blakus labākajam ir vēl viens numurs."""
+    votes: dict[str, float] = defaultdict(float)
+    for text, conf, _ in texts:
+        serials = parsing.find_serials(text)
+        if best not in serials:
+            continue
+        for other in serials:
+            if other != best and len(other) >= 5 and other not in best and best not in other:
+                votes[other] += conf
+    return max(votes, key=votes.get) if votes else ""
+
+
 def read_field(name: str, page: Image.Image, page_words: dict, matrix, engines) -> FieldResult:
     box = field_box(matrix, name, page.size)
     crop = page.crop(box)
@@ -311,9 +326,14 @@ def read_field(name: str, page: Image.Image, page_words: dict, matrix, engines) 
         # neatkarīgi nonāk pie tās pašas vērtības un nav pretrunīgu variantu.
         result.confident = (support >= 3 and engine_support >= 2
                             and not _conflicts(best, ranked) and not result.note)
-        if name == "serial" and len(best) != 6:
-            result.confident = False
-            result.note = "Numurs nav 6 cipari, lūdzu pārbaudiet"
+        if name == "serial":
+            result.second = _second_serial(best, texts)
+            if result.second:
+                result.confident = False
+                result.note = "Atrasti divi sērijas numuri (divi alkometri?), pārbaudiet abus"
+            elif len(best) != 6:
+                result.confident = False
+                result.note = "Numurs nav 6 cipari, lūdzu pārbaudiet"
     if not result.confident and not result.note:
         result.note = "Rīks nav pārliecināts, lūdzu pārbaudiet"
     return result

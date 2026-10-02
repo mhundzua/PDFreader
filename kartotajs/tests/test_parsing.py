@@ -52,3 +52,8 @@ def test_fuzzy_labels():
 def test_serial_with_letter_prefix():
     assert parsing.find_serial("SNL 127668") == "127668"  # burtus izlaižam
     assert parsing.find_serial("NR.: 235126") == "235126"
+
+
+def test_serial_letters_and_two_serials():
+    assert parsing.find_serial("SN 127668") == "127668"
+    assert parsing.find_serials("127668; 219044") == ["127668", "219044"]

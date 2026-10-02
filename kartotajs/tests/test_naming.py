@@ -30,3 +30,19 @@ def test_validate():
 
     errors, _ = naming.validate("ROV_043274", "12/34", "2026-08-29")
     assert "serial" in errors
+
+
+def test_two_serials():
+    assert naming.file_name("ROV_043396", "127668;219044") == "ROV_043396-127668;219044.pdf"
+    assert naming.file_name("ROV_043396", " 127668 ; 219044 ") == "ROV_043396-127668;219044.pdf"
+    errors, warnings = naming.validate("ROV_043396", "127668;219044", "2026-09-19")
+    assert errors == {} and warnings == []
+    errors, _ = naming.validate("ROV_043396", "127668;127668", "2026-09-19")
+    assert "serial" in errors
+
+
+def test_serial_with_letters_allowed_when_typed():
+    # Rets gadījums: numuru ar burtiem lietotājs ieraksta pats.
+    errors, warnings = naming.validate("ROV_043396", "1CH2667", "2026-09-19")
+    assert errors == {} and warnings == []
+    assert naming.file_name("ROV_043396", "1CH2667") == "ROV_043396-1CH2667.pdf"
