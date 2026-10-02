@@ -144,12 +144,12 @@ def test_two_receipts_in_one_file(cfg):
         library.accept(cfg, "divas.pdf", "ROV_043452", "214204", "2026-09-27",
                        unit=top, all_units=units)
 
-    second = library.accept(cfg, "divas.pdf", "ROV_043396", "SNL127668", "2026-09-19",
+    second = library.accept(cfg, "divas.pdf", "ROV_043396", "127668", "2026-09-19",
                             unit=bottom, all_units=units)
     assert second["finished"]
     assert not (cfg.inbox_path / "divas.pdf").exists()
     assert (cfg.processed_path / "divas.pdf").exists()
-    assert (cfg.output_path / "2026-Septembris" / "ROV_043396-SNL127668.pdf").exists()
+    assert (cfg.output_path / "2026-Septembris" / "ROV_043396-127668.pdf").exists()
 
     # Atsaucot otro: oriģināls atgriežas, pirmā paliek akceptēta.
     library.undo(cfg)

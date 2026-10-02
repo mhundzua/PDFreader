@@ -21,8 +21,10 @@ Viss notiek uz jūsu datora: nav maksas servisu, internets nav vajadzīgs
    Kad visas kvītis no skenējuma ir akceptētas, oriģināls tiek pārvietots uz
    `Ienākošie/Apstrādāti`.
 
-Ja sērijas numuram priekšā ir burti (piem. `SNL 127668`), tie tiek saglabāti
-nosaukumā bez atstarpes: `ROV_043396-SNL127668.pdf`.
+Ja sērijas numuram priekšā ir burti (piem. `SNL 127668`), tie tiek izlaisti:
+`ROV_043396-127668.pdf`.
+
+Skenējiet ar **300 dpi**: rokraksts tiek nolasīts precīzāk nekā ar 150 dpi.
 
 ### Drošība
 

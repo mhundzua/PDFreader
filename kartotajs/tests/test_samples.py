@@ -68,7 +68,7 @@ def test_two_receipts_on_one_page(engines):
     assert len(units) == 2
     expected = [
         {"contract": "ROV_043452", "serial": "214203", "date": "2026-09-27"},
-        {"contract": "ROV_043396", "serial": "SNL127668", "date": "2026-09-19"},
+        {"contract": "ROV_043396", "serial": "127668", "date": "2026-09-19"},
     ]
     for unit, exp in zip(units, expected):
         fields = unit["fields"]

@@ -77,11 +77,11 @@ _PREFIXED_SERIAL_RE = re.compile(r"(?<![A-Za-z])([A-Z]{2,4})\s?(\d{4,})(?!\d)")
 def find_serial(text: str) -> Optional[str]:
     """Garākā ciparu virkne (pēc burtu pārvēršanas). Priekšroka 6 cipariem.
 
-    Ja numuram priekšā ir lielie burti (piem. 'SNL 127668'), tie tiek saglabāti: 'SNL127668'.
+    Ja numuram priekšā ir lielie burti (piem. 'SNL 127668'), tie tiek izlaisti: '127668'.
     """
     for m in _PREFIXED_SERIAL_RE.finditer(text):
-        if m.group(1) not in ("NR", "NO", "ROV"):  # etiķetes vai līguma Nr. atliekas
-            return m.group(1) + m.group(2)
+        if m.group(1) not in ("ROV",):  # līguma Nr. atliekas
+            return m.group(2)
     digits = to_digits(text)
     runs = re.findall(r"\d+", digits)
     # Ja OCR starp cipariem ielicis atstarpi, mēģinām arī salipināt.
