@@ -193,6 +193,7 @@ def create_app(cfg: Config | None = None) -> Flask:
             "last": library.last_action(cfg),
             "unsupported": library.unsupported_in_inbox(cfg),
             "learned": extractor.corrections.by_field["serial"],
+            "stats": library.stats_summary(cfg),
         })
 
     def _page_arg() -> int:
@@ -276,6 +277,14 @@ def create_app(cfg: Config | None = None) -> Flask:
         )
         extractor.learn("serial", body.get("serial", "").strip(), readings.get("serial", []))
         extractor.learn("date", body.get("date", "").strip(), readings.get("date", []))
+        fields = unit.get("fields", {})
+        suggested_serial = ";".join(v for v in (fields.get("serial", {}).get("value", ""),
+                                                fields.get("serial", {}).get("second", "")) if v)
+        library.record_stats(
+            cfg,
+            serial_ok=suggested_serial.upper() == body.get("serial", "").strip().upper(),
+            date_ok=fields.get("date", {}).get("value", "") == body.get("date", "").strip(),
+        )
         return jsonify(result)
 
     @app.post("/api/undo")

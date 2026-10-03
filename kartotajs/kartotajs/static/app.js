@@ -48,8 +48,12 @@ async function refreshQueue() {
   state.items = data.queue;
   state.queue = data.queue.map((q) => q.key);
   state.settings = { inbox: data.inbox, output: data.output };
-  $("#learned").textContent = data.learned
-    ? `Rokraksts iemācīts no ${data.learned} kvītīm` : "";
+  const st = data.stats || {};
+  const parts = [];
+  if (data.learned) parts.push(`Rokraksts iemācīts no ${data.learned} kvītīm`);
+  if (st.n) parts.push(`pēdējās ${st.n}: sērijas Nr. pareizi ${st.serial}%, datums ${st.date}%`);
+  $("#learned").textContent = parts.join(" · ");
+  $("#learned").title = "Cik bieži rīka ieteiktā vērtība bija pareiza bez labošanas";
   $("#undo").disabled = !data.last;
   $("#undo").title = data.last
     ? `Atsaukt: ${data.last.target.split(/[\\/]/).slice(-2).join("/")}`

@@ -181,3 +181,9 @@ def test_old_progress_entries_are_ignored(cfg):
     fp = library._fingerprint(cfg.inbox_path / "skenejums1.pdf")
     path.write_text(json.dumps({"skenejums1.pdf": {"size": fp, "done": {"0-0": "x"}}}))
     assert library.done_units(cfg, "skenejums1.pdf") == set()
+
+
+def test_stats_summary(cfg):
+    library.record_stats(cfg, True, False)
+    library.record_stats(cfg, False, False)
+    assert library.stats_summary(cfg) == {"n": 2, "serial": 50, "date": 0}

@@ -129,6 +129,35 @@ def _log(cfg: Config, action: str, record: dict) -> None:
         ])
 
 
+def _stats_path(cfg: Config) -> Path:
+    return cfg.state_dir / "statistika.json"
+
+
+def record_stats(cfg: Config, serial_ok: bool, date_ok: bool) -> None:
+    """Vai rīka ieteiktā vērtība bija pareiza (lietotājs to nemainīja)."""
+    try:
+        rows = json.loads(_stats_path(cfg).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        rows = []
+    rows.append({"time": dt.datetime.now().isoformat(timespec="seconds"),
+                 "serial": serial_ok, "date": date_ok})
+    cfg.state_dir.mkdir(parents=True, exist_ok=True)
+    _stats_path(cfg).write_text(json.dumps(rows[-2000:]), encoding="utf-8")
+
+
+def stats_summary(cfg: Config, last: int = 50) -> dict:
+    try:
+        rows = json.loads(_stats_path(cfg).read_text(encoding="utf-8"))[-last:]
+    except (OSError, ValueError):
+        rows = []
+    n = len(rows)
+    return {
+        "n": n,
+        "serial": round(100 * sum(r["serial"] for r in rows) / n) if n else None,
+        "date": round(100 * sum(r["date"] for r in rows) / n) if n else None,
+    }
+
+
 def samples_dir(cfg: Config) -> Path:
     return cfg.state_dir / "paraugi"
 
