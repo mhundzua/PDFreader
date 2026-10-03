@@ -168,20 +168,35 @@ def _fingerprint(path: Path) -> str:
     return f"{st.st_size}:{int(st.st_mtime)}"
 
 
+# Atzīmes glabājam tikai, kamēr fails ir daļēji apstrādāts. Vecākās versijas atzīmes
+# (bez "v") palika arī pēc faila pabeigšanas un paslēpa no jauna iekopētus failus.
+PROGRESS_VERSION = 2
+
+
 def done_units(cfg: Config, name: str) -> set[str]:
     """Kuras kvītis no šī faila jau ir akceptētas (ja failā ir vairākas kvītis)."""
     entry = _load_progress(cfg).get(name)
     path = cfg.inbox_path / name
-    if not entry or not path.exists() or entry.get("size") != _fingerprint(path):
+    if (not entry or entry.get("v") != PROGRESS_VERSION or not path.exists()
+            or entry.get("size") != _fingerprint(path)):
         return set()
     return set(entry.get("done", {}))
+
+
+def _replace_progress(cfg: Config, name: str, entry: Optional[dict]) -> None:
+    data = _load_progress(cfg)
+    if entry and entry.get("done"):
+        data[name] = entry
+    else:
+        data.pop(name, None)
+    _save_progress(cfg, data)
 
 
 def _set_done(cfg: Config, name: str, size: str, unit_id: str, target: Optional[str]) -> None:
     data = _load_progress(cfg)
     entry = data.get(name)
-    if not entry or entry.get("size") != size:
-        entry = {"size": size, "done": {}}
+    if not entry or entry.get("v") != PROGRESS_VERSION or entry.get("size") != size:
+        entry = {"v": PROGRESS_VERSION, "size": size, "done": {}}
     if target is None:
         entry["done"].pop(unit_id, None)
     else:
@@ -226,12 +241,18 @@ def accept(cfg: Config, name: str, contract: str, serial: str, date_iso: str,
 
     size = _fingerprint(source)
     finished = True
+    earlier_done: dict = {}
     if unit_id:
         _set_done(cfg, name, size, unit_id, str(target))
         finished = set(all_units) <= done_units(cfg, name)
     processed = None
     if finished:
-        # Visas kvītis no šī faila ir apstrādātas: oriģinālu pārvietojam.
+        # Visas kvītis no šī faila ir apstrādātas: oriģinālu pārvietojam un atzīmes
+        # dzēšam (ja to pašu failu vēlāk iekopē vēlreiz, tas atkal parādās rindā).
+        if unit_id:
+            entry = _load_progress(cfg).get(name) or {}
+            earlier_done = {k: v for k, v in entry.get("done", {}).items() if k != unit_id}
+            _replace_progress(cfg, name, None)
         cfg.processed_path.mkdir(parents=True, exist_ok=True)
         processed = _free_name(cfg.processed_path, source.name)
         shutil.move(str(source), str(processed))
@@ -241,6 +262,7 @@ def accept(cfg: Config, name: str, contract: str, serial: str, date_iso: str,
         "unit": unit_id,
         "size": size,
         "processed": str(processed) if processed else None,
+        "earlier_done": earlier_done,  # pārējās šī faila kvītis (atsaukšanai)
         "target": str(target),
         "sha256": _sha256(target),
         "contract": contract,
@@ -284,8 +306,13 @@ def undo(cfg: Config) -> dict:
     if processed:
         shutil.move(str(processed), str(original))
     if record.get("unit"):
-        _set_done(cfg, record["source"], record.get("size") or _fingerprint(original),
-                  record["unit"], None)
+        size = record.get("size") or _fingerprint(original)
+        if processed:
+            # Fails bija pabeigts: atjaunojam pārējo tā kvīšu atzīmes.
+            _replace_progress(cfg, record["source"], {
+                "v": PROGRESS_VERSION, "size": size, "done": record.get("earlier_done") or {}})
+        else:
+            _set_done(cfg, record["source"], size, record["unit"], None)
     for sample in record.get("samples", []):
         try:
             os.remove(sample)

@@ -159,3 +159,25 @@ def test_two_receipts_in_one_file(cfg):
     library.undo(cfg)
     assert library.done_units(cfg, "divas.pdf") == set()
     assert not (cfg.output_path / "2026-Septembris").exists()
+
+
+def test_same_file_copied_again_is_shown(cfg):
+    """Pēc pabeigšanas tas pats fails, iekopēts vēlreiz, nedrīkst pazust no rindas."""
+    import shutil
+
+    _two_receipt_pdf(cfg.inbox_path / "skenejums1.pdf")  # īsts PDF
+    unit = {"id": "0-0", "page": 0, "top": 0.0, "bottom": 1.0}
+    library.accept(cfg, "skenejums1.pdf", "ROV_043274", "235126", "2026-08-29",
+                   unit=unit, all_units=["0-0"])
+    shutil.copy2(cfg.processed_path / "skenejums1.pdf", cfg.inbox_path / "skenejums1.pdf")
+    assert library.done_units(cfg, "skenejums1.pdf") == set()
+
+
+def test_old_progress_entries_are_ignored(cfg):
+    import json
+
+    path = cfg.state_dir / "progress.json"
+    cfg.state_dir.mkdir(parents=True, exist_ok=True)
+    fp = library._fingerprint(cfg.inbox_path / "skenejums1.pdf")
+    path.write_text(json.dumps({"skenejums1.pdf": {"size": fp, "done": {"0-0": "x"}}}))
+    assert library.done_units(cfg, "skenejums1.pdf") == set()
