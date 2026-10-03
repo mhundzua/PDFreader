@@ -12,7 +12,9 @@ import mimetypes
 
 from flask import Flask, jsonify, request, send_file
 
-from . import documents, extract, library
+from PIL import Image
+
+from . import documents, extract, learning, library
 from .config import Config
 from .ocr import available_engines
 
@@ -30,7 +32,32 @@ class Extractor:
         self._cache: dict[tuple, dict] = {}
         self._page_counts: dict[tuple, int] = {}
         self._lock = threading.Lock()
+        self.corrections = learning.load_corrections(library.samples_dir(cfg))
         threading.Thread(target=self._background, daemon=True).start()
+
+    def learn(self, field: str, value: str, readings: list) -> None:
+        """Pēc akceptēšanas: nākamās kvītis jau lasām ar papildināto tabulu."""
+        self.corrections.add(field, value, [tuple(r) for r in readings])
+
+    def _bootstrap_samples(self) -> None:
+        """Vecākiem paraugiem (bez OCR nolasījumiem) nolasījumus izveidojam vienreiz fonā."""
+        missing = learning.missing_readings(library.samples_dir(self.cfg))
+        if not missing:
+            return
+        log.info("Mācīšanās: sagatavoju %d paraugus", len(missing))
+        for field, png in missing:
+            if library.list_inbox(self.cfg) and any(
+                    not self.cached(self.cfg.inbox_path / n, 0) for n in library.list_inbox(self.cfg)):
+                return  # vispirms nolasām jaunās kvītis; turpināsim vēlāk
+            try:
+                with self._lock:
+                    crop = Image.open(png).convert("RGB")
+                    texts = extract.crop_texts(field, crop, self.engines())
+                readings = [(src, text) for text, _, src in texts]
+                learning.save_readings(png, readings)
+                self.learn(field, png.stem.split("__")[0], readings)
+            except Exception:
+                log.exception("Neizdevās sagatavot paraugu %s", png.name)
 
     @staticmethod
     def _key(path: Path) -> tuple:
@@ -71,7 +98,8 @@ class Extractor:
             if key not in self._cache:
                 started = time.time()
                 try:
-                    result = extract.extract_page(path, page, self.engines())
+                    result = extract.extract_page(path, page, self.engines(),
+                                                  self.corrections.tables())
                 except Exception as exc:
                     log.exception("Neizdevās nolasīt %s", path.name)
                     result = {"error": f"Neizdevās nolasīt kvīti: {exc}", "page": page,
@@ -104,6 +132,7 @@ class Extractor:
                     for page in range(self.pages(path)):
                         if path.exists() and not self.cached(path, page):
                             self.get(path, page)
+                self._bootstrap_samples()
             except Exception:
                 log.exception("Fona nolasīšanas kļūda")
             time.sleep(2)
@@ -163,6 +192,7 @@ def create_app(cfg: Config | None = None) -> Flask:
             "queue": queue_items(cfg, extractor),
             "last": library.last_action(cfg),
             "unsupported": library.unsupported_in_inbox(cfg),
+            "learned": extractor.corrections.by_field["serial"],
         })
 
     def _page_arg() -> int:
@@ -235,13 +265,17 @@ def create_app(cfg: Config | None = None) -> Flask:
         unit = extractor.unit(path, page, body.get("unit") or f"{page}-0")
         all_units = extractor.all_units(path)
         crops = {k: v.get("crop", "") for k, v in unit.get("fields", {}).items()}
+        readings = {k: v.get("readings", []) for k, v in unit.get("fields", {}).items()}
         result = library.accept(
             cfg, name, body.get("contract", ""), body.get("serial", ""), body.get("date", ""),
             crops,
             unit={"id": unit["id"], "page": page, "top": unit["top"], "bottom": unit["bottom"]},
             # Ja ne visas lapas vēl nolasītas, fails vēl nav pabeigts.
             all_units=all_units if all_units is not None else [unit["id"], "?"],
+            readings=readings,
         )
+        extractor.learn("serial", body.get("serial", "").strip(), readings.get("serial", []))
+        extractor.learn("date", body.get("date", "").strip(), readings.get("date", []))
         return jsonify(result)
 
     @app.post("/api/undo")

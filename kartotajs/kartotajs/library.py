@@ -17,6 +17,7 @@ from typing import Optional
 
 from .config import Config
 from .documents import as_pdf_bytes, is_supported, unit_pdf_bytes
+from .learning import readings_path, save_readings
 from .naming import file_name, folder_name, parse_iso, validate
 
 
@@ -128,19 +129,27 @@ def _log(cfg: Config, action: str, record: dict) -> None:
         ])
 
 
-def _save_samples(cfg: Config, record: dict, crops: dict, values: dict) -> list[str]:
-    """Saglabā apstiprināto lauku izgriezumus vēlākai rokraksta apmācībai."""
+def samples_dir(cfg: Config) -> Path:
+    return cfg.state_dir / "paraugi"
+
+
+def _save_samples(cfg: Config, record: dict, crops: dict, values: dict,
+                  readings: Optional[dict] = None) -> list[str]:
+    """Saglabā apstiprināto lauku izgriezumus un OCR nolasījumus rokraksta mācībām."""
     saved = []
     for field in ("serial", "date"):
         data = crops.get(field)
         if not data:
             continue
-        folder = cfg.state_dir / "paraugi" / field
+        folder = samples_dir(cfg) / field
         folder.mkdir(parents=True, exist_ok=True)
         path = folder / f"{values[field]}__{record['contract']}.png"
         try:
             path.write_bytes(base64.b64decode(data))
             saved.append(str(path))
+            if readings and readings.get(field):
+                save_readings(path, readings[field])
+                saved.append(str(readings_path(path)))
         except (ValueError, OSError):
             continue
     return saved
@@ -210,7 +219,7 @@ def _set_done(cfg: Config, name: str, size: str, unit_id: str, target: Optional[
 
 def accept(cfg: Config, name: str, contract: str, serial: str, date_iso: str,
            crops: Optional[dict] = None, unit: Optional[dict] = None,
-           all_units: Optional[list[str]] = None) -> dict:
+           all_units: Optional[list[str]] = None, readings: Optional[dict] = None) -> dict:
     """Saglabā kvīti. unit = {"id", "page", "top", "bottom"}, ja failā ir vairākas kvītis;
     all_units = visu faila kvīšu id (lai zinātu, kad oriģinālu var pārvietot)."""
     source = inbox_file(cfg, name)
@@ -270,7 +279,8 @@ def accept(cfg: Config, name: str, contract: str, serial: str, date_iso: str,
         "date": date_iso,
         "time": dt.datetime.now().isoformat(timespec="seconds"),
     }
-    record["samples"] = _save_samples(cfg, record, crops or {}, {"serial": serial, "date": date_iso})
+    record["samples"] = _save_samples(cfg, record, crops or {},
+                                      {"serial": serial, "date": date_iso}, readings)
     stack = _load_undo(cfg)
     stack.append(record)
     _save_undo(cfg, stack)

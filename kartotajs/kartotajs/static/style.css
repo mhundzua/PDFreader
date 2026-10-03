@@ -181,3 +181,5 @@ dialog::backdrop { background: rgba(0,0,0,.35); }
 .second-row { margin-top: 6px; }
 .second-row[hidden], #add-serial2[hidden] { display: none; }
 button.link { background: none; border: none; color: var(--accent); padding: 4px 0; cursor: pointer; }
+
+.small-text { font-size: 12px; margin-left: auto; margin-right: 12px; }

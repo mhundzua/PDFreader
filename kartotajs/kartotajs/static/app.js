@@ -48,6 +48,8 @@ async function refreshQueue() {
   state.items = data.queue;
   state.queue = data.queue.map((q) => q.key);
   state.settings = { inbox: data.inbox, output: data.output };
+  $("#learned").textContent = data.learned
+    ? `Rokraksts iemācīts no ${data.learned} kvītīm` : "";
   $("#undo").disabled = !data.last;
   $("#undo").title = data.last
     ? `Atsaukt: ${data.last.target.split(/[\\/]/).slice(-2).join("/")}`

@@ -22,7 +22,7 @@ from typing import Optional
 import numpy as np
 from PIL import Image
 
-from . import parsing
+from . import learning, parsing
 from .documents import page_count, render_page
 from .ocr import Word
 
@@ -49,7 +49,7 @@ TEMPLATE_ANCHORS = {
 TEMPLATE_FIELDS = {
     "contract": (1430, 35, 1810, 120),
     "date": (1330, 115, 1810, 205),
-    "serial": (420, 395, 1000, 485),
+    "serial": (420, 395, 1170, 485),  # līdz kolonnas malai (8 ciparu numuri)
 }
 FIELD_LABELS = {"contract": "LIGUMANR", "date": "DATUMS", "serial": "ALKOMETRASERIJASNR"}
 
@@ -64,6 +64,7 @@ class FieldResult:
     crop_png: str = ""  # base64
     candidates: list[str] = field(default_factory=list)
     second: str = ""  # otrs sērijas Nr., ja kvītī ir divi alkometri
+    readings: list = field(default_factory=list)  # (avots, OCR teksts) mācībām
 
     def as_dict(self) -> dict:
         return {
@@ -73,6 +74,7 @@ class FieldResult:
             "crop": self.crop_png,
             "candidates": self.candidates,
             "second": self.second,
+            "readings": self.readings,
         }
 
 
@@ -261,7 +263,9 @@ def _vote(parsed: list[tuple[str, float, str]]) -> tuple[str, int, int, list[str
         sources[value].add(src.split("-alt")[0])
     if not scores:
         return "", 0, 0, []
-    ranked = sorted(scores, key=lambda v: (-len(sources[v]), -scores[v]))
+    # Priekšroka ierastajam garumam: datumam vienmēr, sērijas Nr. - 6 vai 8 cipari.
+    usual = lambda v: len(v) in (6, 8, 10) or not v.isdigit()
+    ranked = sorted(scores, key=lambda v: (not usual(v), -len(sources[v]), -scores[v]))
     best = ranked[0]
     engines = {s.split(":")[0] for s in sources[best]}
     return best, len(sources[best]), len(engines), ranked[:5]
@@ -285,11 +289,21 @@ def _second_serial(best: str, texts: list[tuple[str, float, str]]) -> str:
     return max(votes, key=votes.get) if votes else ""
 
 
-def read_field(name: str, page: Image.Image, page_words: dict, matrix, engines) -> FieldResult:
-    box = field_box(matrix, name, page.size)
-    crop = page.crop(box)
-    texts = collect_texts(name, page, page_words, box, engines)
-    result = FieldResult(crop_png=png_b64(crop))
+def crop_texts(name: str, crop: Image.Image, engines) -> list[tuple[str, float, str]]:
+    """OCR nolasījumi tikai no lauka izgriezuma (izmanto mācīšanās paraugiem)."""
+    return collect_texts(name, crop, {}, (0, 0, crop.width, crop.height), engines)
+
+
+def decide(name: str, texts: list[tuple[str, float, str]],
+           tables: Optional[dict] = None) -> FieldResult:
+    """No visiem nolasījumiem izvēlas vērtību un nosaka, vai tā ir droša.
+
+    tables: iemācītās OCR simbolu tabulas pa dzinējiem (sk. learning.py).
+    """
+    result = FieldResult(readings=[(src, text) for text, _, src in texts])
+    if name != "contract" and tables:
+        texts = [(learning.apply(text, tables.get(src.split(":")[0])), conf, src)
+                 for text, conf, src in texts]
 
     parsed = []
     for text, conf, src in texts:
@@ -311,6 +325,10 @@ def read_field(name: str, page: Image.Image, page_words: dict, matrix, engines) 
         if parsed:
             result.note = "Gads nav salasāms, pieņemts pēdējais iespējamais. Pārbaudiet datumu"
 
+    if name == "serial" and tables and tables.get("_first"):
+        first = tables["_first"]
+        parsed = [((first.get(v[0], v[0]) + v[1:]) if v[:1].isdigit() else v, c, s)
+                  for v, c, s in parsed]
     best, support, engine_support, ranked = _vote(parsed)
     result.value = best
     result.candidates = ranked
@@ -331,11 +349,20 @@ def read_field(name: str, page: Image.Image, page_words: dict, matrix, engines) 
             if result.second:
                 result.confident = False
                 result.note = "Atrasti divi sērijas numuri (divi alkometri?), pārbaudiet abus"
-            elif len(best) != 6:
+            elif len(best) not in (6, 8):
                 result.confident = False
-                result.note = "Numurs nav 6 cipari, lūdzu pārbaudiet"
+                result.note = "Numurs nav 6 vai 8 cipari, lūdzu pārbaudiet"
     if not result.confident and not result.note:
         result.note = "Rīks nav pārliecināts, lūdzu pārbaudiet"
+    return result
+
+
+def read_field(name: str, page: Image.Image, page_words: dict, matrix, engines,
+               tables: Optional[dict] = None) -> FieldResult:
+    box = field_box(matrix, name, page.size)
+    texts = collect_texts(name, page, page_words, box, engines)
+    result = decide(name, texts, tables)
+    result.crop_png = png_b64(page.crop(box))
     return result
 
 
@@ -375,17 +402,18 @@ def _shift(words: list[Word], y0: int, y1: int) -> list[Word]:
     return out
 
 
-def read_receipt(img: Image.Image, page_words: dict, engines) -> dict:
+def read_receipt(img: Image.Image, page_words: dict, engines,
+                 tables: Optional[dict] = None) -> dict:
     all_words = [w for ws in page_words.values() for w in ws]
     matrix, anchors = fit_layout(all_words, img.size)
     fields = {
-        name: read_field(name, img, page_words, matrix, engines).as_dict()
+        name: read_field(name, img, page_words, matrix, engines, tables).as_dict()
         for name in ("contract", "serial", "date")
     }
     return {"fields": fields, "anchors": anchors}
 
 
-def extract_page(path: Path, page_index: int, engines) -> dict:
+def extract_page(path: Path, page_index: int, engines, tables: Optional[dict] = None) -> dict:
     """Nolasa vienu faila lapu. Atgriež visas tajā atrastās kvītis ("units")."""
     page = render_page(path, page=page_index)
     page_words = {}
@@ -399,7 +427,7 @@ def extract_page(path: Path, page_index: int, engines) -> dict:
     for i, (y0, y1) in enumerate(find_receipts(all_words, page.size)):
         img = page.crop((0, y0, page.width, y1))
         words = {name: _shift(ws, y0, y1) for name, ws in page_words.items()}
-        unit = read_receipt(img, words, engines)
+        unit = read_receipt(img, words, engines, tables)
         unit.update({
             "id": f"{page_index}-{i}",
             "page": page_index,
@@ -416,9 +444,9 @@ def extract_page(path: Path, page_index: int, engines) -> dict:
     }
 
 
-def extract(path: Path, engines) -> dict:
+def extract(path: Path, engines, tables: Optional[dict] = None) -> dict:
     """Ērtības funkcija: pirmās lapas pirmā kvīts (un visas kvītis laukā "units")."""
-    result = extract_page(path, 0, engines)
+    result = extract_page(path, 0, engines, tables)
     first = result["units"][0]
     return {**result, "fields": first["fields"], "anchors": first["anchors"],
             "pages": page_count(path)}

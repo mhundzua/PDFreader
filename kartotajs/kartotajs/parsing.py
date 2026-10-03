@@ -106,9 +106,9 @@ def find_serial(text: str) -> Optional[str]:
     serials = find_serials(text)
     if not serials:
         return None
-    six = [s for s in serials if len(s) == 6]
-    if six:
-        return six[0]
+    usual = [s for s in serials if len(s) in (6, 8)]  # 8 cipari: Mercury
+    if usual:
+        return usual[0]
     return max(serials, key=len)
 
 

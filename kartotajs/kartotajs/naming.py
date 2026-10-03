@@ -52,8 +52,9 @@ def validate(contract: str, serial: str, date_iso: str) -> tuple[dict, list[str]
         errors["serial"] = "Abi sērijas numuri ir vienādi"
     else:
         for s in serials:
-            if s.isdigit() and len(s) != 6:
-                warnings.append(f"Sērijas Nr. {s} nav 6 cipari, lūdzu pārbaudiet")
+            # Parasti 6 cipari; Mercury alkometriem 8 (piem. 10300183).
+            if s.isdigit() and len(s) not in (6, 8):
+                warnings.append(f"Sērijas Nr. {s} nav 6 vai 8 cipari, lūdzu pārbaudiet")
     date = parse_iso(date_iso)
     if date is None:
         errors["date"] = "Datums nav derīgs"
